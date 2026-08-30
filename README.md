@@ -62,6 +62,33 @@ The resulting executable will be:
 dist\ATR1000_Protection_Monitor.exe
 ```
 
+## Automatic GitHub builds
+
+Every push to `main` runs the **Build Windows EXE** workflow. The completed run contains a downloadable artifact named:
+
+```text
+ATR1000_Protection_Monitor_Windows
+```
+
+## Creating a GitHub Release
+
+A version tag automatically triggers the **Release Windows EXE** workflow. GitHub builds the Windows program, creates a release, generates release notes, and attaches:
+
+```text
+ATR1000_Protection_Monitor.exe
+```
+
+For example, to publish version 1.0.0 from a local clone:
+
+```powershell
+git checkout main
+git pull
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+For the next release, use a new tag such as `v1.0.1` or `v1.1.0`.
+
 ## Default ports
 
 | Interface | Default |
