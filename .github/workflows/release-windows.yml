@@ -4,6 +4,15 @@ on:
   push:
     tags:
       - "v*"
+    paths:
+      - "VERSION"
+      - ".github/workflows/release-windows.yml"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, for example v1.0.0"
+        required: true
+        default: "v1.0.0"
 
 permissions:
   contents: write
@@ -15,6 +24,26 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        shell: powershell
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $version = "${{ inputs.version }}"
+          } elseif ("${{ github.ref_type }}" -eq "tag") {
+            $version = "${{ github.ref_name }}"
+          } else {
+            $version = (Get-Content VERSION -Raw).Trim()
+          }
+
+          if ($version -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+            throw "VERSION must look like v1.0.0. Found: $version"
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -34,12 +63,32 @@ jobs:
             --name ATR1000_Protection_Monitor `
             atr1000_tci_protection_monitor_v6_no_login.py
 
+      - name: Create tag if needed
+        if: github.ref_type != 'tag'
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          if (git ls-remote --tags origin "refs/tags/$version" | Select-String $version) {
+            Write-Host "Tag $version already exists."
+          } else {
+            git tag $version
+            git push origin $version
+          }
+
       - name: Create GitHub Release and upload EXE
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" `
-            "dist/ATR1000_Protection_Monitor.exe" `
-            --title "ATR1000 Protection Monitor ${{ github.ref_name }}" `
-            --generate-notes
+          $version = "${{ steps.version.outputs.version }}"
+          if (gh release view $version *> $null) {
+            gh release upload $version "dist/ATR1000_Protection_Monitor.exe" --clobber
+          } else {
+            gh release create $version `
+              "dist/ATR1000_Protection_Monitor.exe" `
+              --target "${{ github.sha }}" `
+              --title "ATR1000 Protection Monitor $version" `
+              --generate-notes
+          }
